@@ -1,0 +1,30 @@
+name: Build Windows (Qt 5.15, runs on Windows 7/8.1)
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: windows
+          target: desktop
+          arch: win64_mingw81
+          tools: 'tools_mingw,qt.tools.win64_mingw810'
+          cache: true
+      - name: Build
+        shell: bash
+        run: |
+          qmake AbsoluteCinema.pro CONFIG+=release
+          mingw32-make -j2
+      - name: Package
+        shell: bash
+        run: |
+          mkdir dist
+          cp release/AbsoluteCinema.exe dist/
+          windeployqt --release --no-translations --compiler-runtime dist/AbsoluteCinema.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AbsoluteCinema-windows
+          path: dist
