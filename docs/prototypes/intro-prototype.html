@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Absolute Cinema – intro prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--fg:#e9f1ff;--mut:#8aa0c4;--panel:rgba(8,12,24,.85);--acc:#6aa8ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--fg:#e9f1ff}}
+:root[data-theme="dark"]{--bg:#000;--fg:#e9f1ff}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;overflow:hidden}
+#stage{position:relative;height:calc(100% - 190px);min-height:240px;overflow:hidden;perspective:900px}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+#title{position:absolute;left:50%;top:10%;transform-origin:50% 50%;text-align:center;white-space:nowrap;opacity:0;will-change:transform,opacity;pointer-events:none}
+#title svg{width:1.5em;height:.9em;display:block;margin:0 auto -.1em}
+#title .w{font-family:'Pirata One','UnifrakturCook',Georgia,serif;font-size:1em;line-height:.95;letter-spacing:.02em;
+background:linear-gradient(180deg,#fff 0%,#dfe8f5 38%,#6f7f99 52%,#f4f8ff 70%,#9fb3d4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+filter:drop-shadow(0 0 .08em rgba(120,170,255,.9)) drop-shadow(0 .03em .02em #000)}
+#flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(170,205,255,.55),transparent 60%);opacity:0;pointer-events:none}
+#bar{position:absolute;left:0;right:0;bottom:0;height:190px;box-sizing:border-box;background:var(--panel);border-top:1px solid #1e2c4a;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));overflow:auto}
+.row{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+label{display:flex;align-items:center;gap:8px;color:var(--mut)}
+input[type=range]{width:120px;accent-color:var(--acc)}
+button{background:#12234a;color:var(--fg);border:1px solid #2c4a86;border-radius:8px;padding:8px 14px;font:inherit}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.go{background:var(--acc);color:#001028;border-color:var(--acc);font-weight:600}
+small{display:block;color:var(--mut);margin-top:6px}
+</style></head><body>
+<div id="stage">
+<canvas id="c"></canvas><div id="flash"></div>
+<div id="title"><svg viewBox="0 0 100 60" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#7d8ea9"/><stop offset="1" stop-color="#e6eeff"/></linearGradient></defs><path d="M8 52 L4 14 L26 32 L50 6 L74 32 L96 14 L92 52 Z" fill="url(#g)" stroke="#9cc2ff" stroke-width="1.5"/><circle cx="50" cy="38" r="4.5" fill="#5da0ff"/><circle cx="4" cy="14" r="3" fill="#fff"/><circle cx="96" cy="14" r="3" fill="#fff"/><circle cx="50" cy="6" r="3" fill="#fff"/></svg><div class="w">Absolute<br>Cinema</div></div>
+</div>
+<div id="bar">
+<div class="row">
+<button class="go" id="play">Replay intro</button>
+<button id="out">Preview outro</button>
+<label><input type="checkbox" id="lean" checked> Lean forward at the end</label>
+<label><input type="checkbox" id="snd" checked> Sound</label>
+</div>
+<div class="row" style="margin-top:8px">
+<label>Approach <input type="range" id="dur" min="2" max="10" step=".5" value="5"><span id="dv">5s</span></label>
+<label>Final size <input type="range" id="size" min="40" max="300" value="170"><span id="sv">170%</span></label>
+<label>Fade out <input type="range" id="fade" min=".5" max="4" step=".5" value="1.5"><span id="fv">1.5s</span></label>
+</div>
+<small>Prototype: the starfield is generated here. In the app it is your video or last visualizer, and the pulse comes from real audio.</small>
+</div>
+<script>
+const $=id=>document.getElementById(id),cv=$('c'),cx=cv.getContext('2d'),T=$('title'),F=$('flash');
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let W,H,stars=[],pulse=0,ac=null;
+function size(){const r=cv.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);W=cv.width=r.width*d;H=cv.height=r.height*d}
+addEventListener('resize',size);size();
+for(let i=0;i<260;i++)stars.push({x:(Math.random()-.5)*2,y:(Math.random()-.5)*2,z:Math.random()});
+['dur','size','fade'].forEach(k=>$(k).oninput=()=>{$(k=='dur'?'dv':k=='size'?'sv':'fv').textContent=$(k).value+(k=='size'?'%':'s')});
+let mode='idle',t0=0,rev=false;
+function start(r){rev=r;mode='run';t0=performance.now();audio(r)}
+$('play').onclick=()=>start(false);$('out').onclick=()=>start(true);
+const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2, eo=x=>1-Math.pow(1-x,3);
+function audio(r){
+ if(!$('snd').checked)return;
+ try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const d=+$('dur').value,n=ac.currentTime,g=ac.createGain();g.connect(ac.destination);
+ const o=ac.createOscillator(),f=ac.createBiquadFilter();o.type='sawtooth';f.type='lowpass';o.connect(f);f.connect(g);
+ const a=r?[260,55]:[55,260];o.frequency.setValueAtTime(a[0],n);o.frequency.exponentialRampToValueAtTime(a[1],n+d);f.frequency.setValueAtTime(300,n);f.frequency.exponentialRampToValueAtTime(2400,n+d);
+ g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(.18,n+d*.9);g.gain.linearRampToValueAtTime(0,n+d+.2);o.start(n);o.stop(n+d+.3);
+ if(!r){const b=ac.createOscillator(),bg=ac.createGain();b.frequency.setValueAtTime(90,n+d);b.frequency.exponentialRampToValueAtTime(32,n+d+1.2);bg.gain.setValueAtTime(0,n);bg.gain.setValueAtTime(.7,n+d);bg.gain.exponentialRampToValueAtTime(.001,n+d+1.4);b.connect(bg);bg.connect(ac.destination);b.start(n+d);b.stop(n+d+1.5)}}catch(e){}
+}
+function frame(now){
+ const sp=.002+pulse*.01;cx.fillStyle='rgba(0,0,0,.35)';cx.fillRect(0,0,W,H);
+ for(const s of stars){const px=s.x/s.z*W*.25+W/2,py=s.y/s.z*H*.25+H/2;s.z-=sp*(reduce?.3:1);if(s.z<.02||px<0||px>W||py<0||py>H){s.x=(Math.random()-.5)*2;s.y=(Math.random()-.5)*2;s.z=1}
+  const nx=s.x/(s.z+sp*8)*W*.25+W/2,ny=s.y/(s.z+sp*8)*H*.25+H/2,b=1-s.z;cx.strokeStyle=`rgba(${190+b*60|0},${210+b*40|0},255,${b})`;cx.lineWidth=1+b*1.5;cx.beginPath();cx.moveTo(nx,ny);cx.lineTo(px,py);cx.stroke()}
+ const sh=$('stage').clientHeight,sw=$('stage').clientWidth;
+ let op=0,y=0,sc=0,rot=0,fl=0;
+ if(mode=='run'){
+  const D=+$('dur').value*1000,Fd=+$('fade').value*1000,Hd=900,e=now-t0,fin=$('size').value/100;
+  let u;if(!rev){u=e<D?0:e<D+Hd?1:2}else u=0;
+  const tt=rev?(e<Fd?0:1):0;
+  if(!rev){
+   if(e<D){const p=ease(e/D);op=Math.min(1,e/600);y=.1+.4*p;sc=.03+(fin-.03)*Math.pow(p,2.2)}
+   else{const f=Math.min(1,(e-D)/Fd);y=.5;sc=fin*(1+.3*f);op=1-f;if($('lean').checked&&!reduce){rot=-16*eo(Math.min(1,(e-D)/Hd))}fl=Math.max(0,1-(e-D)/700)*.8;
+    if(f>=1)mode='idle';pulse=e>=D&&e<D+500?1:pulse}
+  }else{ // outro: starts large and recedes toward the top, fading
+   const R=+$('dur').value*1000,p=Math.min(1,e/R);y=.5-.4*ease(p);sc=fin-(fin-.03)*ease(p);op=p<.75?Math.min(1,e/500):1-(p-.75)/.25;if(p>=1)mode='idle'}
+  const f2=sc*sw/6.2;T.style.fontSize=f2+'px';
+  T.style.transform=`translate(-50%,-50%) rotateX(${rot}deg)`;T.style.top=y*sh+'px';T.style.opacity=op;F.style.opacity=fl;
+ }else{T.style.opacity=0;F.style.opacity=0}
+ pulse*=.94;if(mode=='idle'&&!reduce)pulse=Math.max(pulse,.12+.1*Math.sin(now/420)*Math.sin(now/1700));
+ requestAnimationFrame(frame)}
+T.style.fontSize='10px';requestAnimationFrame(frame);start(false);
+</script></body></html>
