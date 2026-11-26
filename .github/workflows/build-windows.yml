@@ -11,10 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: List files
-        shell: bash
-        run: ls -R | head -60
-
       - uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
@@ -33,9 +29,13 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          mkdir dist
+          QT=$(cygpath -u "$QT_ROOT_DIR")
+          mkdir -p dist/platforms
           cp release/AbsoluteCinema.exe dist/
-          windeployqt --release --no-translations --compiler-runtime dist/AbsoluteCinema.exe
+          cp "$QT/bin/Qt5Core.dll" "$QT/bin/Qt5Gui.dll" "$QT/bin/Qt5Widgets.dll" dist/
+          cp "$QT/bin/libgcc_s_seh-1.dll" "$QT/bin/libstdc++-6.dll" "$QT/bin/libwinpthread-1.dll" dist/
+          cp "$QT/plugins/platforms/qwindows.dll" dist/platforms/
+          ls -R dist
 
       - uses: actions/upload-artifact@v4
         with:
