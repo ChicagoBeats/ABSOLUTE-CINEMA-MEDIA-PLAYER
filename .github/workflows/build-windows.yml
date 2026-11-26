@@ -8,11 +8,12 @@ on:
 jobs:
   build:
     runs-on: windows-2022
-    defaults:
-      run:
-        working-directory: Absolute-Cinema
     steps:
       - uses: actions/checkout@v4
+
+      - name: List files
+        shell: bash
+        run: ls -R | head -60
 
       - uses: jurplel/install-qt-action@v4
         with:
@@ -39,4 +40,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: AbsoluteCinema-windows
-          path: Absolute-Cinema/dist
+          path: dist
